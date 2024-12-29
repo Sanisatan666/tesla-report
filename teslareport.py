@@ -4,7 +4,49 @@ from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from dotenv import load_dotenv
 import jdatetime
-Bot.set_webhook(url=os.getenv("WEBHOOK_URL"))
+from telegram import Bot
+import os
+from telegram import Bot
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Get the bot token from the environment variable
+bot_token = os.getenv("BOT_TOKEN")
+
+# Print token to verify it is correct (for debugging)
+print(f"Bot Token: {bot_token}")
+
+# Check if bot_token is None
+if not bot_token:
+    raise ValueError("BOT_TOKEN not found. Make sure it's set correctly in the .env file.")
+
+# Create an instance of the Bot class using the token
+bot = Bot(token=bot_token)
+
+# Get the webhook URL from the environment variable
+webhook_url = os.getenv("WEBHOOK_URL")
+
+# Check if the webhook URL is correct
+if not webhook_url:
+    raise ValueError("WEBHOOK_URL not found. Make sure it's set correctly in the .env file.")
+
+# Set the webhook
+bot.set_webhook(url=webhook_url)
+
+# Get the bot token from the environment variable
+bot_token = os.getenv("BOT_TOKEN")
+
+# Create an instance of the Bot class using the token
+bot = Bot(token=bot_token)
+
+# Set the webhook URL from the environment variable
+webhook_url = os.getenv("WEBHOOK_URL")
+
+# Set the webhook
+bot.set_webhook(url=webhook_url)
 
 # Load environment variables from .env file
 load_dotenv()
