@@ -2,11 +2,20 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 import jdatetime
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
 
 # Set up logging to track any issues
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Fetch bot token and webhook URL from environment variables
+TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 # Global variables to store responses
 project = ""
@@ -20,7 +29,6 @@ rack_status = ""
 # Function to handle the /start command
 async def start(update: Update, context: CallbackContext):
     user = update.message.from_user
-    # Updated greeting message to ask for the project name
     greeting_message = f"سلام {user.first_name} @{user.username}!\nتاریخ امروز: {jdatetime.datetime.now().strftime('%Y/%m/%d')}\n\nنام پروژه امروز چیست؟"
     await update.message.reply_text(greeting_message)
     ask_project_name(update)  # Directly ask for the project name
@@ -88,16 +96,26 @@ def reset_variables():
     with_someone = ""
     rack_status = ""
 
+# Function to set the webhook
+def set_webhook():
+    from telegram import Bot
+    bot = Bot(token=TOKEN)
+    bot.set_webhook(url=WEBHOOK_URL)
+
+# Main function to run the bot
 def main():
-    # Your bot token
-    token = "7882638117:AAGd0KELurHGyRBrhY8I4s96Cox1u1431v0"
+    if not TOKEN or not WEBHOOK_URL:
+        raise ValueError("BOT_TOKEN or WEBHOOK_URL is missing in the .env file.")
 
     # Create Application instance and dispatcher
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(TOKEN).build()
 
     # Add handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # Set webhook for the bot (only if you are using webhook)
+    set_webhook()
 
     # Start the bot
     application.run_polling()
