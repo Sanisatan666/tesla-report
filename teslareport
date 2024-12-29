@@ -1,0 +1,98 @@
+import os
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackContext
+from dotenv import load_dotenv
+
+# Load the bot token from the .env file
+load_dotenv()
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# Define the stages of the conversation
+DATE, COMPLETED_TASKS, PENDING_TASKS, ADDITIONAL_NOTES = range(4)
+
+# Replace this with your user ID (for direct messages)
+YOUR_USER_ID = 'YOUR_USER_ID'
+
+def start(update: Update, context: CallbackContext) -> int:
+    """Start the conversation and ask for the date."""
+    update.message.reply_text("سلام! لطفاً تاریخ امروز را وارد کنید (فرمت: YYYY-MM-DD):")
+    return DATE
+
+def receive_date(update: Update, context: CallbackContext) -> int:
+    """Save the date and ask for completed tasks."""
+    user_data = context.user_data
+    user_data['date'] = update.message.text
+    update.message.reply_text("لطفاً لیست کارهای انجام شده امروز را وارد کنید:")
+    return COMPLETED_TASKS
+
+def receive_completed_tasks(update: Update, context: CallbackContext) -> int:
+    """Save the completed tasks and ask for pending tasks."""
+    user_data = context.user_data
+    user_data['completed_tasks'] = update.message.text
+    update.message.reply_text("لطفاً لیست کارهای معلق را وارد کنید:")
+    return PENDING_TASKS
+
+def receive_pending_tasks(update: Update, context: CallbackContext) -> int:
+    """Save the pending tasks and ask for additional notes."""
+    user_data = context.user_data
+    user_data['pending_tasks'] = update.message.text
+    update.message.reply_text("لطفاً هر نکته اضافی یا توضیحاتی دارید را وارد کنید:")
+    return ADDITIONAL_NOTES
+
+def receive_additional_notes(update: Update, context: CallbackContext) -> int:
+    """Save the additional notes and send the formatted report."""
+    user_data = context.user_data
+    user_data['additional_notes'] = update.message.text
+
+    # Format the report
+    report = f"""
+    گزارش روزانه:
+    تاریخ: {user_data['date']}
+    کارهای انجام شده:
+    {user_data['completed_tasks']}
+    کارهای معلق:
+    {user_data['pending_tasks']}
+    نکات اضافی:
+    {user_data['additional_notes']}
+    """
+
+    # Send the report to yourself (replace 'YOUR_USER_ID' with your actual user ID)
+    context.bot.send_message(chat_id=YOUR_USER_ID, text=report)
+
+    # End the conversation
+    update.message.reply_text("گزارش روزانه شما ارسال شد. ممنون از شما!")
+    return ConversationHandler.END
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    """Cancel the conversation."""
+    update.message.reply_text("گزارش روزانه شما لغو شد.")
+    return ConversationHandler.END
+
+def main() -> None:
+    """Start the bot and handle commands."""
+    updater = Updater(TELEGRAM_BOT_TOKEN)
+
+    # Get the dispatcher to register handlers
+    dispatcher = updater.dispatcher
+
+    # Define conversation handler
+    conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            DATE: [MessageHandler(Filters.text & ~Filters.command, receive_date)],
+            COMPLETED_TASKS: [MessageHandler(Filters.text & ~Filters.command, receive_completed_tasks)],
+            PENDING_TASKS: [MessageHandler(Filters.text & ~Filters.command, receive_pending_tasks)],
+            ADDITIONAL_NOTES: [MessageHandler(Filters.text & ~Filters.command, receive_additional_notes)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+
+    # Add the conversation handler to the dispatcher
+    dispatcher.add_handler(conversation_handler)
+
+    # Start the bot
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
