@@ -4,6 +4,7 @@ from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from dotenv import load_dotenv
 import jdatetime
+Bot.set_webhook(url=os.getenv("WEBHOOK_URL"))
 
 # Load environment variables from .env file
 load_dotenv()
