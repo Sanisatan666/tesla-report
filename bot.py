@@ -1,118 +1,156 @@
-import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
-import jdatetime
-from flask import Flask, request
 import os
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    ConversationHandler,
+)
+from datetime import datetime
+import pytz
 
-# Set up logging to track any issues
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Load environment variables
+load_dotenv()
 
-# Global variables to store responses
-project = ""
-address = ""
-iphone = ""
-completed_tasks = ""
-pending_tasks = ""
-with_someone = ""
-rack_status = ""
+# States for conversation
+(
+    PROJECT_NAME,
+    PROJECT_ADDRESS,
+    COMPLETED_TASKS,
+    REMAINING_TASKS,
+    COMPANION_STATUS,
+    RACK_STATUS,
+) = range(6)
 
-# Create Flask app
-app = Flask(__name__)
+# Store user responses (in memory)
+user_responses = {}
 
-# Function to handle the /start command
-async def start(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    greeting_message = f"سلام {user.first_name} @{user.username}!\nتاریخ امروز: {jdatetime.datetime.now().strftime('%Y/%m/%d')}\n\nنام پروژه امروز چیست؟"
-    await update.message.reply_text(greeting_message)
-    ask_project_name(update)  # Directly ask for the project name
+# Questions in Persian
+QUESTIONS = {
+    PROJECT_NAME: "نام پروژه امروز چیست؟",
+    PROJECT_ADDRESS: "آدرس پروژه امروز چیست؟",
+    COMPLETED_TASKS: "کارهای انجام شده",
+    REMAINING_TASKS: "کارهای مانده",
+    COMPANION_STATUS: "همراه (With someone or solo):",
+    RACK_STATUS: "وضعیت رک (Rack Status - Installed or not):",
+}
 
-# Function to ask for the project name first
-async def ask_project_name(update: Update):
-    await update.message.reply_text("نام پروژه امروز چیست؟")
 
-# Function to handle the responses to each question
-async def handle_message(update: Update, context: CallbackContext):
-    global project, address, iphone, completed_tasks, pending_tasks, with_someone, rack_status
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
 
-    text = update.message.text
+    # Initialize storage for this user
+    user_responses[user_id] = {
+        "start_time": get_tehran_time(),
+    }
 
-    if project == "":
-        project = text
-        await update.message.reply_text("آدرس پروژه امروز چیست؟")
-    elif address == "":
-        address = text
-        await update.message.reply_text("آیفون (iPhone):")
-    elif iphone == "":
-        iphone = text
-        await update.message.reply_text("کارهای انجام شده (Completed Tasks):")
-    elif completed_tasks == "":
-        completed_tasks = text
-        await update.message.reply_text("کارهای مانده (Pending Tasks):")
-    elif pending_tasks == "":
-        pending_tasks = text
-        await update.message.reply_text("همراه (With someone or solo):")
-    elif with_someone == "":
-        with_someone = text
-        await update.message.reply_text("وضعیت رک (Rack Status - Installed or not):")
-    elif rack_status == "":
-        rack_status = text
-        await send_report(update)
+    # Send welcome message with current Tehran time
+    await update.message.reply_text(
+        f"زمان شروع: {user_responses[user_id]['start_time']}\n\n"
+        f"{QUESTIONS[PROJECT_NAME]}"
+    )
 
-# Function to format and send the report
-async def send_report(update: Update):
-    report = f"""
-پروژه: {project}
-تاریخ: {jdatetime.datetime.now().strftime('%Y/%m/%d')}
-آدرس: {address}
-رک: {rack_status}
-آیفون: {iphone}
-کارهای انجام شده:
-{completed_tasks}
-همراه: {with_someone}
-کارهای مانده: {pending_tasks}
-    """
-    await update.message.reply_text("گزارش شما به این شکل است:\n" + report)
-    reset_variables()
+    return PROJECT_NAME
 
-# Function to reset the global variables for the next report
-def reset_variables():
-    global project, address, iphone, completed_tasks, pending_tasks, with_someone, rack_status
-    project = ""
-    address = ""
-    iphone = ""
-    completed_tasks = ""
-    pending_tasks = ""
-    with_someone = ""
-    rack_status = ""
 
-# Set up webhook to receive updates
-@app.route(f'/{os.getenv("BOT_TOKEN")}', methods=['POST'])
-def webhook():
-    json_str = request.get_data().decode('UTF-8')
-    update = Update.de_json(json_str)
-    application.process_update(update)
-    return "OK", 200
+def get_tehran_time():
+    tehran_tz = pytz.timezone("Asia/Tehran")
+    current_time = datetime.now(tehran_tz)
+    return current_time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    current_state = context.user_data.get("state", PROJECT_NAME)
+
+    # Store the answer
+    user_responses[user_id][current_state] = update.message.text
+
+    # Move to next state
+    next_state = current_state + 1
+
+    # If we have more questions, ask the next one
+    if next_state < RACK_STATUS + 1:
+        await update.message.reply_text(QUESTIONS[next_state])
+        return next_state
+
+    # If we're done, format and send the final response
+    final_response = format_final_response(user_id)
+    await update.message.reply_text(final_response)
+
+    # Clear user data
+    if user_id in user_responses:
+        del user_responses[user_id]
+
+    return ConversationHandler.END
+
+
+def format_final_response(user_id):
+    responses = user_responses[user_id]
+
+    return (
+        f"گزارش نهایی:\n\n"
+        f"🕒 زمان شروع: {responses['start_time']}\n"
+        f"📍 نام پروژه: {responses[PROJECT_NAME]}\n"
+        f"📍 آدرس پروژه: {responses[PROJECT_ADDRESS]}\n"
+        f"✅ کارهای انجام شده: {responses[COMPLETED_TASKS]}\n"
+        f"⏳ کارهای مانده: {responses[REMAINING_TASKS]}\n"
+        f"👥 همراه: {responses[COMPANION_STATUS]}\n"
+        f"🔧 وضعیت رک: {responses[RACK_STATUS]}\n\n"
+        f"🕒 زمان پایان: {get_tehran_time()}"
+    )
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in user_responses:
+        del user_responses[user_id]
+
+    await update.message.reply_text(
+        "عملیات لغو شد. برای شروع مجدد از /start استفاده کنید."
+    )
+    return ConversationHandler.END
+
 
 def main():
-    # Your bot token
-    token = os.getenv("BOT_TOKEN")
+    # Create application
+    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
 
-    # Create Application instance and dispatcher
-    global application
-    application = Application.builder().token(token).build()
+    # Create conversation handler
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            PROJECT_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response)
+            ],
+            PROJECT_ADDRESS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response)
+            ],
+            COMPLETED_TASKS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response)
+            ],
+            REMAINING_TASKS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response)
+            ],
+            COMPANION_STATUS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response)
+            ],
+            RACK_STATUS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
 
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Add conversation handler to application
+    application.add_handler(conv_handler)
 
-    # Set up webhook with Telegram
-    application.bot.set_webhook(url=os.getenv("WEBHOOK_URL"))
+    # Start polling
+    application.run_polling(poll_interval=1.0)
 
-    # Start Flask app
-    app.run(host='0.0.0.0', port=5000)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
