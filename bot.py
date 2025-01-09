@@ -30,12 +30,12 @@ user_responses = {}
 
 # Questions in Persian
 QUESTIONS = {
-    PROJECT_NAME: "نام پروژه امروز چیست؟",
-    PROJECT_ADDRESS: "آدرس پروژه امروز چیست؟",
-    COMPLETED_TASKS: "کارهای انجام شده",
-    REMAINING_TASKS: "کارهای مانده",
-    COMPANION_STATUS: "همراه (With someone or solo):",
-    RACK_STATUS: "وضعیت رک (Rack Status - Installed or not):",
+    PROJECT_NAME: "نام پروژه چیست؟",
+    PROJECT_ADDRESS: "آدرس پروژه چیست؟",
+    COMPLETED_TASKS: "کارهای انجام شده چیست؟",
+    REMAINING_TASKS: "کارهای مانده چیست؟",
+    COMPANION_STATUS: "وضعیت همراه چیست؟",
+    RACK_STATUS: "وضعیت رک چیست؟",
 }
 
 
@@ -64,13 +64,18 @@ def get_tehran_time():
 
 async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    current_state = context.user_data.get("state", PROJECT_NAME)
+
+    # Get the current state from the context handler's state
+    current_state = context.chat_data.get("state", PROJECT_NAME)
 
     # Store the answer
     user_responses[user_id][current_state] = update.message.text
 
     # Move to next state
     next_state = current_state + 1
+
+    # Store the next state
+    context.chat_data["state"] = next_state
 
     # If we have more questions, ask the next one
     if next_state < RACK_STATUS + 1:
@@ -84,6 +89,7 @@ async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Clear user data
     if user_id in user_responses:
         del user_responses[user_id]
+    context.chat_data.clear()
 
     return ConversationHandler.END
 
@@ -93,14 +99,14 @@ def format_final_response(user_id):
 
     return (
         f"گزارش نهایی:\n\n"
-        f"🕒 زمان شروع: {responses['start_time']}\n"
-        f"📍 نام پروژه: {responses[PROJECT_NAME]}\n"
-        f"📍 آدرس پروژه: {responses[PROJECT_ADDRESS]}\n"
-        f"✅ کارهای انجام شده: {responses[COMPLETED_TASKS]}\n"
-        f"⏳ کارهای مانده: {responses[REMAINING_TASKS]}\n"
-        f"👥 همراه: {responses[COMPANION_STATUS]}\n"
-        f"🔧 وضعیت رک: {responses[RACK_STATUS]}\n\n"
-        f"🕒 زمان پایان: {get_tehran_time()}"
+        f"زمان شروع: {responses['start_time']}\n"
+        f"نام پروژه: {responses[PROJECT_NAME]}\n"
+        f"آدرس پروژه: {responses[PROJECT_ADDRESS]}\n"
+        f"کارهای انجام شده: {responses[COMPLETED_TASKS]}\n"
+        f"کارهای مانده: {responses[REMAINING_TASKS]}\n"
+        f"همراه: {responses[COMPANION_STATUS]}\n"
+        f"وضعیت رک: {responses[RACK_STATUS]}\n\n"
+        f"زمان پایان: {get_tehran_time()}"
     )
 
 
@@ -108,6 +114,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_responses:
         del user_responses[user_id]
+    context.chat_data.clear()
 
     await update.message.reply_text(
         "عملیات لغو شد. برای شروع مجدد از /start استفاده کنید."
