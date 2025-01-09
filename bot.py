@@ -1,5 +1,4 @@
-import os
-from dotenv import load_dotenv
+import logging
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -11,6 +10,16 @@ from telegram.ext import (
 )
 from datetime import datetime
 import pytz
+import os
+from dotenv import load_dotenv
+
+# Set up logging for this script only
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 # Load environment variables
 load_dotenv()
@@ -63,10 +72,13 @@ def get_tehran_time():
 
 
 async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    # Get the current state from the context handler's state
+    user = update.effective_user
+    user_id = user.id
+    user_name = user.first_name
     current_state = context.chat_data.get("state", PROJECT_NAME)
+
+    # Log user activity
+    logger.info(f"[{user_id}][{user_name}] Answered {current_state}")
 
     # Store the answer
     user_responses[user_id][current_state] = update.message.text
